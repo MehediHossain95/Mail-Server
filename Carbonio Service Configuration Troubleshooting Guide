@@ -1,0 +1,93 @@
+# Carbonio Service Configuration Troubleshooting Guide
+
+## Description
+
+This guide addresses the issue where `carbonio.service` fails to start while individual services are running correctly. The problem typically manifests as a systemd service failure due to missing or misconfigured control scripts.
+
+## Issue Symptoms
+
+- [ ] `carbonio.service` shows as failed in systemd
+- [ ] Individual Carbonio services are running
+- [ ] `zmcontrol` command not found or inaccessible
+- [ ] Permission denied errors in service logs
+
+## Quick Solution
+
+```bash
+# 1. Locate zmcontrol
+sudo find /opt/zextras -name zmcontrol
+
+# 2. Set proper permissions
+sudo chmod +x /opt/zextras/bin/zmcontrol
+
+# 3. Update service script
+sudo nano /etc/init.d/carbonio
+
+# 4. Modify carbonio_command function to use full path:
+carbonio_command() {
+  if [ -f /opt/zextras/redolog/redo.log ]; then
+    chown -f zextras:zextras /opt/zextras/redolog/redo.log
+  fi
+  su - zextras -c "/opt/zextras/bin/zmcontrol $1 </dev/null"
+}
+
+# 5. Reload and restart
+sudo systemctl daemon-reload
+sudo systemctl restart carbonio.service
+```
+
+## Verification Steps
+
+```bash
+# Check service status
+sudo systemctl status carbonio.service
+
+# Verify all components
+sudo -u zextras /opt/zextras/bin/zmcontrol status
+```
+
+## Debugging Information
+
+Please provide the following when reporting issues:
+
+1. Service Status:
+```bash
+sudo systemctl status carbonio.service
+```
+
+2. Component Status:
+```bash
+sudo systemctl list-units carbonio*
+```
+
+3. Service Logs:
+```bash
+sudo journalctl -u carbonio.service -n 50
+```
+
+4. System Information:
+- OS Version:
+- Carbonio Version:
+- Installation Method:
+
+## Related Issues
+
+- #issue-number (if applicable)
+- Link to related discussions
+
+## Additional Notes
+
+- Ensure all required services are enabled
+- Check for proper permissions on log directories
+- Verify system resource availability
+
+## Labels
+
+- bug
+- configuration
+- service
+- systemd
+
+---
+
+Feel free to modify this template based on your specific needs or environment.
