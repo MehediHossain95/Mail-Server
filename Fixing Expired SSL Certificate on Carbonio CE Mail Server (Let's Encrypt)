@@ -1,0 +1,80 @@
+📌 Problem Overview
+The email clients (e.g., Outlook) connected to the Carbonio CE server started showing certificate warnings. The primary reason was that the SSL certificate had expired. The certbot renewal process was not properly updating the certificate files used by Carbonio CE.
+
+🧭 Step-by-Step Debugging Process
+1. Navigating to the Certificate Directory
+You attempted to navigate to the Let's Encrypt live directory but hit permission issues:
+
+cd /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/
+# => Permission denied
+Trying sudo cd didn’t work either, because cd is a shell built-in and can't be used with sudo directly.
+
+Fix:
+Use a root shell to navigate with sufficient privileges:
+
+sudo -i
+cd /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/
+Or list contents directly:
+
+
+sudo ls -l /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/
+2. Understanding Directory Structure
+Inside /opt/carbonio/common/certbot/etc/letsencrypt/, you observed:
+
+
+accounts  archive  live  renewal  renewal-hooks
+Each subdirectory contains important certbot data:
+
+live/ – contains symlinks to the most recent certificate files
+
+archive/ – stores historical versions of certificates
+
+renewal/ – contains renewal config files
+
+renewal-hooks/deploy/ – where you can automate post-renewal actions
+
+🔗 3. Updating Certificate Symlinks for Carbonio CE
+You created symlinks so that Carbonio CE uses the latest Let's Encrypt certificates:
+
+t
+sudo ln -sf /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/fullchain.pem /opt/carbonio/conf/nginx.crt
+sudo ln -sf /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/privkey.pem /opt/carbonio/conf/nginx.key
+
+sudo ln -sf /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/fullchain.pem /opt/carbonio/conf/smtpd.crt
+sudo ln -sf /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/privkey.pem /opt/carbonio/conf/smtpd.key
+This ensures both the Carbonio web interface (NGINX) and SMTP services use updated certificates.
+
+🔁 4. Automating Certificate Reload After Renewal
+To avoid repeating this manually after each renewal, you added a deploy hook:
+
+File: /opt/carbonio/common/certbot/etc/letsencrypt/renewal-hooks/deploy/reload-carbonio.sh
+
+
+#!/bin/bash
+ln -sf /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/fullchain.pem /opt/carbonio/conf/nginx.crt
+ln -sf /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/privkey.pem /opt/carbonio/conf/nginx.key
+ln -sf /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/fullchain.pem /opt/carbonio/conf/smtpd.crt
+ln -sf /opt/carbonio/common/certbot/etc/letsencrypt/live/example.com/privkey.pem /opt/carbonio/conf/smtpd.key
+
+/usr/bin/su - carbonio -c "zmcontrol restart"
+Make it executable:
+
+
+chmod +x /opt/carbonio/common/certbot/etc/letsencrypt/renewal-hooks/deploy/reload-carbonio.sh
+Now, this script runs automatically when certbot renews the certificate.
+
+✅ Final Result
+Your Carbonio CE web and mail services are now using valid, current Let's Encrypt certificates.
+
+Outlook and other clients no longer show expired certificate warnings.
+
+Future renewals will automatically update the symlinks and restart the server via the renewal hook.
+
+📦 Key Tips for Others
+Always use sudo -i or sudo su to get shell access when navigating protected directories.
+
+Link your certs using symlinks instead of copying — this allows automation.
+
+Use certbot’s renewal-hooks/deploy for any automation needed after renewal (e.g., restarting services).
+
+Always test cert renewals manually first: sudo certbot renew --dry-run.
